@@ -1,0 +1,12 @@
+{
+  "name": "crypto-price-streamer",
+  "private": true,
+  "scripts": {
+    "install": "pnpm install --recursive",
+    "dev": "./run.sh"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@crypto-streamer/backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "generate": "buf generate ../proto"
+  },
+  "dependencies": {
+    "@bufbuild/buf": "^1.28.1",
+    "@bufbuild/protobuf": "^1.6.0",
+    "@bufbuild/protoc-gen-es": "^1.6.0",
+    "@connectrpc/connect": "^1.2.0",
+    "@connectrpc/connect-node": "^1.2.0",
+    "@connectrpc/protoc-gen-connect-es": "^1.2.0",
+    "playwright": "^1.40.1",
+    "tsx": "^4.7.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.3.3"
+  }
+}

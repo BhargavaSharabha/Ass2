@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package crypto.v1;
+
+message Ticker {
+  string symbol = 1;
+  string price = 2;
+  int64 timestamp = 3;
+}
+
+message SubscribeRequest {
+  string ticker = 1;
+}
+
+message UnsubscribeRequest {
+  string ticker = 1;
+}
+
+message SubscribeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UnsubscribeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PriceUpdate {
+  string ticker = 1;
+  string price = 2;
+  int64 timestamp = 3;
+}
+
+service CryptoService {
+  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
+  rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeResponse);
+  rpc StreamPrices(stream SubscribeRequest) returns (stream PriceUpdate);
+}
