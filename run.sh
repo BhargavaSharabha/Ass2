@@ -3,28 +3,30 @@
 echo "Starting Crypto Price Streamer..."
 
 # Install dependencies if needed
-if [ ! -d "node_modules" ] || [ ! -d "backend/node_modules" ] || [ ! -d "frontend/node_modules" ]; then
-    echo "Installing dependencies..."
-    pnpm install --recursive
+if [ ! -d "backend/node_modules" ]; then
+    echo "Installing backend dependencies..."
+    cd backend && pnpm install && cd ..
 fi
 
-# Generate protobuf files
-echo "Generating protobuf files..."
-cd backend && npx buf generate ../proto && cd ..
-cd frontend && npx buf generate ../proto && cd ..
+if [ ! -d "frontend/node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    cd frontend && pnpm install && cd ..
+fi
 
 # Start backend server
 echo "Starting backend server..."
 cd backend && pnpm start &
 BACKEND_PID=$!
+cd ..
 
 # Wait for backend to start
 sleep 5
 
 # Start frontend server
 echo "Starting frontend server..."
-cd ../frontend && pnpm dev &
+cd frontend && pnpm dev &
 FRONTEND_PID=$!
+cd ..
 
 echo "Application started!"
 echo "Backend PID: $BACKEND_PID"
