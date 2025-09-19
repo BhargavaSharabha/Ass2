@@ -1,0 +1,10 @@
+Yes now it is showing connected but when I add A ticker it is not showing any accurate data.
+
+What I observed in inspect element is below HTML code contain price, below is example for ETHUSD
+
+1. <span translate="no" class="last-zoF9r75I js-symbol-last"><span>4,456.41</span></span>
+2. <span translate="no" class="last-zoF9r75I js-symbol-last">4,45<span class="">6.80</span></span>
+3. <span translate="no" class="last-zoF9r75I js-symbol-last">4,456.<span class="growing-raL_9_5p">81</span></span>
+4. <span translate="no" class="last-zoF9r75I js-symbol-last">4,456.<span class="falling-raL_9_5p">79</span></span>
+
+When I first loaded the page it gave me 1(formate not value) and it changed to 2(formate not value) and if the price grow it gave 3(formate not value) and changed to 2(formate not value) and if it fall it gave 4(formate not value) and changed to 2(formate not value).

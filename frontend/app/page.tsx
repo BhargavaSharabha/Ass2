@@ -20,87 +20,58 @@ export default function Home() {
   const [subscribedTickers, setSubscribedTickers] = useState<Set<string>>(new Set());
   const [selectedTicker, setSelectedTicker] = useState<string>('');
   const [connected, setConnected] = useState(false);
-  const streamControllerRef = useRef<AbortController | null>(null);
-  const writerRef = useRef<WritableStreamDefaultWriter | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     console.log('Initializing connection to backend...');
     connectToBackend();
 
     return () => {
-      if (streamControllerRef.current) {
-        streamControllerRef.current.abort();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
     };
   }, []);
 
-  const connectToBackend = async () => {
-    try {
-      if (streamControllerRef.current) {
-        streamControllerRef.current.abort();
-      }
-
-      streamControllerRef.current = new AbortController();
-
-      console.log('Creating stream connection...');
-
-      const response = await fetch('http://localhost:8080/StreamPrices', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-        signal: streamControllerRef.current.signal,
-        duplex: 'half' as any,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      setConnected(true);
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim()) {
-            try {
-              const data = JSON.parse(line);
-              if (data.ticker && data.price) {
-                console.log(`Price update received: ${data.ticker} = ${data.price}`);
-                setPrices(prev => {
-                  const newPrices = new Map(prev);
-                  newPrices.set(data.ticker, {
-                    ticker: data.ticker,
-                    price: data.price,
-                    timestamp: data.timestamp || Date.now()
-                  });
-                  return newPrices;
-                });
-              }
-            } catch (e) {
-              console.error('Failed to parse update:', e);
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Failed to connect to backend:', error);
-        setConnected(false);
-        setTimeout(connectToBackend, 5000);
-      }
+  const connectToBackend = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
     }
+
+    console.log('Creating EventSource connection...');
+    const eventSource = new EventSource('http://localhost:8080/events');
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      console.log('Connected to backend');
+      setConnected(true);
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.ticker && data.price) {
+          console.log(`Price update received: ${data.ticker} = ${data.price}`);
+          setPrices(prev => {
+            const newPrices = new Map(prev);
+            newPrices.set(data.ticker, {
+              ticker: data.ticker,
+              price: data.price,
+              timestamp: data.timestamp || Date.now()
+            });
+            return newPrices;
+          });
+        }
+      } catch (e) {
+        console.error('Failed to parse update:', e);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('EventSource error:', error);
+      setConnected(false);
+      setTimeout(() => connectToBackend(), 5000);
+    };
   };
 
   const subscribeTicker = async (ticker: string) => {
@@ -110,10 +81,9 @@ export default function Home() {
     }
 
     console.log(`Subscribing to ${ticker}...`);
-    setSubscribedTickers(prev => new Set([...prev, ticker]));
 
     try {
-      await fetch('http://localhost:8080/StreamPrices', {
+      const response = await fetch('http://localhost:8080/subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,33 +91,49 @@ export default function Home() {
         body: JSON.stringify({ ticker }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      setSubscribedTickers(prev => new Set([...prev, ticker]));
       console.log(`Successfully subscribed to ${ticker}`);
     } catch (error) {
       console.error(`Failed to subscribe to ${ticker}:`, error);
-      setSubscribedTickers(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(ticker);
-        return newSet;
-      });
     }
   };
 
   const unsubscribeTicker = async (ticker: string) => {
     console.log(`Unsubscribing from ${ticker}...`);
 
-    setSubscribedTickers(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(ticker);
-      return newSet;
-    });
+    try {
+      const response = await fetch('http://localhost:8080/unsubscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ticker }),
+      });
 
-    setPrices(prev => {
-      const newPrices = new Map(prev);
-      newPrices.delete(ticker);
-      return newPrices;
-    });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-    console.log(`Unsubscribed from ${ticker}`);
+      setSubscribedTickers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(ticker);
+        return newSet;
+      });
+
+      setPrices(prev => {
+        const newPrices = new Map(prev);
+        newPrices.delete(ticker);
+        return newPrices;
+      });
+
+      console.log(`Unsubscribed from ${ticker}`);
+    } catch (error) {
+      console.error(`Failed to unsubscribe from ${ticker}:`, error);
+    }
   };
 
   const handleAddTicker = () => {

@@ -74,7 +74,12 @@ export class PriceScraper {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       console.log(`Page loaded for ${ticker}`);
 
-      await page.waitForTimeout(2000);
+      // Wait for the price element to be visible
+      await page.waitForSelector('span.js-symbol-last', { timeout: 10000 }).catch(() => {
+        console.log(`Price selector not found immediately for ${ticker}, continuing...`);
+      });
+
+      await page.waitForTimeout(3000);
 
       const intervalId = setInterval(async () => {
         try {
@@ -99,39 +104,33 @@ export class PriceScraper {
 
   private async extractPrice(page: Page, ticker: string): Promise<string | null> {
     try {
-      const priceSelectors = [
-        'div[data-symbol-short] span.js-symbol-last',
-        'span[data-symbol-last]',
-        'div.tv-symbol-price-quote__value',
-        '[class*="lastPrice"]',
-        'span.tv-symbol-price-quote__value',
-        'div[class*="priceValue"]'
-      ];
+      // Use a simpler approach to extract the price
+      const price = await page.evaluate(() => {
+        const priceElement = document.querySelector('span.js-symbol-last');
+        if (!priceElement) return null;
 
-      for (const selector of priceSelectors) {
-        try {
-          const element = await page.$(selector);
-          if (element) {
-            const price = await element.textContent();
-            if (price && price.trim()) {
-              return price.trim();
-            }
-          }
-        } catch (e) {
-        }
+        const text = priceElement.textContent || '';
+        return text.trim().replace(/,/g, '') || null;
+      });
+
+      if (price && /^\d+(\.\d+)?$/.test(price)) {
+        console.log(`Extracted price for ${ticker}: ${price}`);
+        return price;
       }
 
-      const price = await page.evaluate(() => {
-        const elements = document.querySelectorAll('span, div');
-        for (const el of elements) {
-          const text = el.textContent?.trim() || '';
-          if (/^\d{1,10}([.,]\d{1,10})?$/.test(text) && text.length > 1) {
-            const parent = el.parentElement;
-            if (parent && (
-              parent.className.includes('price') ||
-              parent.className.includes('value') ||
-              parent.className.includes('quote')
-            )) {
+      // Fallback selectors
+      const fallbackPrice = await page.evaluate(() => {
+        const selectors = [
+          'div.tv-symbol-price-quote__value',
+          'span[data-symbol-last]',
+          '[class*="priceValue"]'
+        ];
+
+        for (let i = 0; i < selectors.length; i++) {
+          const element = document.querySelector(selectors[i]);
+          if (element) {
+            const text = (element.textContent || '').trim().replace(/,/g, '');
+            if (text && /^\d+(\.\d+)?$/.test(text)) {
               return text;
             }
           }
@@ -139,7 +138,12 @@ export class PriceScraper {
         return null;
       });
 
-      return price;
+      if (fallbackPrice) {
+        console.log(`Extracted price using fallback for ${ticker}: ${fallbackPrice}`);
+        return fallbackPrice;
+      }
+
+      return null;
     } catch (error) {
       console.error(`Error extracting price for ${ticker}:`, error);
       return null;
