@@ -25,13 +25,23 @@ export class PriceScraper {
     console.log('Browser initialized successfully');
   }
 
-  async addTicker(ticker: string, callback: (price: string) => void) {
+  async addTicker(ticker: string, callback: (price: string) => void): Promise<{ success: boolean; error?: string }> {
     const upperTicker = ticker.toUpperCase();
     console.log(`Adding ticker: ${upperTicker}`);
 
     if (!this.listeners.has(upperTicker)) {
       this.listeners.set(upperTicker, new Set());
-      await this.startScrapingTicker(upperTicker);
+      try {
+        const isValid = await this.startScrapingTicker(upperTicker);
+        if (!isValid) {
+          this.listeners.delete(upperTicker);
+          return { success: false, error: `${upperTicker} is not a valid ticker or price data is not available` };
+        }
+      } catch (error) {
+        this.listeners.delete(upperTicker);
+        console.error(`Error starting scraper for ${upperTicker}:`, error);
+        return { success: false, error: `Failed to verify ticker ${upperTicker}` };
+      }
     }
 
     const callbacks = this.listeners.get(upperTicker)!;
@@ -41,6 +51,8 @@ export class PriceScraper {
     if (currentPrice) {
       callback(currentPrice);
     }
+
+    return { success: true };
   }
 
   async removeTicker(ticker: string, callback: (price: string) => void) {
@@ -58,7 +70,7 @@ export class PriceScraper {
     }
   }
 
-  private async startScrapingTicker(ticker: string) {
+  private async startScrapingTicker(ticker: string): Promise<boolean> {
     if (!this.context) {
       throw new Error('Browser not initialized');
     }
@@ -74,13 +86,23 @@ export class PriceScraper {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       console.log(`Page loaded for ${ticker}`);
 
-      // Wait for the price element to be visible
-      await page.waitForSelector('span.js-symbol-last', { timeout: 10000 }).catch(() => {
-        console.log(`Price selector not found immediately for ${ticker}, continuing...`);
-      });
-
+      // Wait for the page to fully load
       await page.waitForTimeout(3000);
 
+      // Check if we can find a price - this validates if the ticker exists
+      const initialPrice = await this.extractPrice(page, ticker);
+
+      if (!initialPrice) {
+        console.log(`No price found for ${ticker}, invalid ticker`);
+        await page.close();
+        this.pages.delete(ticker);
+        return false;
+      }
+
+      console.log(`Initial price for ${ticker}: ${initialPrice}`);
+      this.prices.set(ticker, initialPrice);
+
+      // Start the interval for continuous price updates
       const intervalId = setInterval(async () => {
         try {
           const price = await this.extractPrice(page, ticker);
@@ -95,10 +117,13 @@ export class PriceScraper {
       }, 500);
 
       this.intervalIds.set(ticker, intervalId);
+      return true;
 
     } catch (error) {
       console.error(`Error loading page for ${ticker}:`, error);
-      throw error;
+      await page.close();
+      this.pages.delete(ticker);
+      return false;
     }
   }
 

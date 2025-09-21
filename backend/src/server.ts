@@ -68,15 +68,25 @@ async function handleSubscribe(req: any, res: any) {
 
       console.log(`Subscription request for ${upperTicker}`);
 
-      // Add ticker to all connected clients (simplified for now)
+      // Start scraping and validate ticker
+      const result = await priceScraper.addTicker(upperTicker, (price: string) => {
+        broadcast(upperTicker, price);
+      });
+
+      if (!result.success) {
+        // Invalid ticker, return error
+        res.writeHead(400, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({ error: result.error }));
+        return;
+      }
+
+      // Add ticker to all connected clients after validation
       for (const client of clients.values()) {
         client.tickers.add(upperTicker);
       }
-
-      // Start scraping if not already
-      await priceScraper.addTicker(upperTicker, (price: string) => {
-        broadcast(upperTicker, price);
-      });
 
       res.writeHead(200, {
         'Content-Type': 'application/json',

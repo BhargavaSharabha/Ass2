@@ -8,18 +8,13 @@ interface PriceData {
   timestamp: number;
 }
 
-const AVAILABLE_TICKERS = [
-  'BTCUSD', 'ETHUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD',
-  'DOGEUSD', 'SOLUSD', 'DOTUSD', 'MATICUSD', 'LTCUSD',
-  'SHIBUSD', 'TRXUSD', 'AVAXUSD', 'DAIUSD', 'WBTCUSD',
-  'LINKUSD', 'UNIUSD', 'ATOMUSD', 'ETCUSD', 'TONUSD'
-];
-
 export default function Home() {
   const [prices, setPrices] = useState<Map<string, PriceData>>(new Map());
   const [subscribedTickers, setSubscribedTickers] = useState<Set<string>>(new Set());
   const [selectedTicker, setSelectedTicker] = useState<string>('');
   const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -75,12 +70,17 @@ export default function Home() {
   };
 
   const subscribeTicker = async (ticker: string) => {
-    if (subscribedTickers.has(ticker)) {
-      console.log(`Already subscribed to ${ticker}`);
+    const upperTicker = ticker.toUpperCase();
+
+    if (subscribedTickers.has(upperTicker)) {
+      console.log(`Already subscribed to ${upperTicker}`);
+      setError(`Already subscribed to ${upperTicker}`);
       return;
     }
 
-    console.log(`Subscribing to ${ticker}...`);
+    console.log(`Subscribing to ${upperTicker}...`);
+    setLoading(true);
+    setError('');
 
     try {
       const response = await fetch('http://localhost:8080/subscribe', {
@@ -88,17 +88,23 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ticker }),
+        body: JSON.stringify({ ticker: upperTicker }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(data.error || `Failed to subscribe to ${upperTicker}`);
       }
 
-      setSubscribedTickers(prev => new Set([...prev, ticker]));
-      console.log(`Successfully subscribed to ${ticker}`);
-    } catch (error) {
-      console.error(`Failed to subscribe to ${ticker}:`, error);
+      setSubscribedTickers(prev => new Set([...prev, upperTicker]));
+      console.log(`Successfully subscribed to ${upperTicker}`);
+      setSelectedTicker('');
+    } catch (error: any) {
+      console.error(`Failed to subscribe to ${upperTicker}:`, error);
+      setError(error.message || `Failed to subscribe to ${upperTicker}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -137,14 +143,21 @@ export default function Home() {
   };
 
   const handleAddTicker = () => {
-    if (selectedTicker && !subscribedTickers.has(selectedTicker)) {
-      subscribeTicker(selectedTicker);
-      setSelectedTicker('');
+    const trimmedTicker = selectedTicker.trim();
+    if (!trimmedTicker) {
+      setError('Please enter a ticker symbol');
+      return;
+    }
+    subscribeTicker(trimmedTicker);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loading) {
+      handleAddTicker();
     }
   };
 
   const sortedTickers = Array.from(subscribedTickers).sort();
-  const availableTickers = AVAILABLE_TICKERS.filter(t => !subscribedTickers.has(t)).sort();
 
   return (
     <div style={{ padding: '20px', fontFamily: 'monospace' }}>
@@ -161,23 +174,36 @@ export default function Home() {
           {connected ? 'Connected' : 'Disconnected'}
         </span>
 
-        <select
+        <input
+          type="text"
           value={selectedTicker}
-          onChange={(e) => setSelectedTicker(e.target.value)}
-          style={{ padding: '5px', marginRight: '10px' }}
-        >
-          <option value="">Select a ticker...</option>
-          {availableTickers.map(ticker => (
-            <option key={ticker} value={ticker}>{ticker}</option>
-          ))}
-        </select>
+          onChange={(e) => setSelectedTicker(e.target.value.toUpperCase())}
+          onKeyPress={handleKeyPress}
+          placeholder="Enter ticker (e.g., BTCUSD)"
+          disabled={loading || !connected}
+          style={{
+            padding: '5px',
+            marginRight: '10px',
+            width: '200px',
+            textTransform: 'uppercase'
+          }}
+        />
         <button
           onClick={handleAddTicker}
-          disabled={!selectedTicker || !connected}
+          disabled={!selectedTicker || !connected || loading}
           style={{ padding: '5px 10px' }}
         >
-          Add Ticker
+          {loading ? 'Adding...' : 'Add Ticker'}
         </button>
+        {error && (
+          <span style={{
+            marginLeft: '10px',
+            color: '#f44336',
+            fontSize: '14px'
+          }}>
+            {error}
+          </span>
+        )}
       </div>
 
       <div style={{ display: 'grid', gap: '10px' }}>

@@ -8,3 +8,44 @@ What I observed in inspect element is below HTML code contain price, below is ex
 4. <span translate="no" class="last-zoF9r75I js-symbol-last">4,456.<span class="falling-raL_9_5p">79</span></span>
 
 When I first loaded the page it gave me 1(formate not value) and it changed to 2(formate not value) and if the price grow it gave 3(formate not value) and changed to 2(formate not value) and if it fall it gave 4(formate not value) and changed to 2(formate not value).
+
+
+Currently We are taking Ticker input from dropdown with limited values,  but I want to take Ticker input from user as text input, so user can add any ticker.
+Then we also need to check if the ticker is valid or not, if not valid we need to show error message.
+To check if the ticker is valid or not we need to do that in backend.
+Currently, When the backend receives a ticker from the frontend, here's the flow:
+
+  Backend Ticker Subscription Flow
+
+  When a POST request hits /subscribe endpoint:
+
+  1. Request Reception (server.ts:57-94)
+    - Receives POST request with ticker in JSON body
+    - Converts ticker to uppercase for consistency
+  2. Client Management (server.ts:72-74)
+    - Adds the ticker to ALL connected SSE clients' ticker sets
+    - This allows broadcasting price updates to relevant clients
+  3. Scraper Activation (server.ts:77-79)
+    - Calls priceScraper.addTicker() with the ticker and a callback function
+    - The callback will be used to broadcast price updates via SSE
+  4. PriceScraper Processing (price-scraper.ts:28-44)
+    - Checks if ticker is already being scraped
+    - If new ticker:
+        - Creates a new Set of callbacks for this ticker
+      - Calls startScrapingTicker() to launch Playwright
+    - Adds the callback to the ticker's callback set
+    - If a price is already cached, immediately sends it to the new subscriber
+  5. Playwright Browser Automation (price-scraper.ts:61-103)
+    - Opens new browser page for the ticker
+    - Navigates to https://www.tradingview.com/symbols/{TICKER}/?exchange=BINANCE
+    - Waits for price element to load
+    - Starts interval (every 500ms) to extract prices from the DOM
+  6. Price Extraction & Broadcasting (price-scraper.ts:84-95)
+    - Extracts price from TradingView page using CSS selectors
+    - When price changes, calls all registered callbacks
+    - Callbacks trigger broadcast() in server.ts
+    - Broadcast sends SSE message to all clients subscribed to that ticker
+
+But to check if a ticker is valid or not we need visit https://www.tradingview.com/symbols/{TICKER}/?exchange=BINANCE
+But we will not get any price if the ticker is invalid.
+So we need to check if the price is available or not, if not available then we will return error message to frontend if not its as usual.
