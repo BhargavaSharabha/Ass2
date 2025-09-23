@@ -13,6 +13,10 @@ if [ ! -d "frontend/node_modules" ]; then
     cd frontend && pnpm install && cd ..
 fi
 
+# Install Playwright browsers
+echo "Installing Playwright browsers..."
+cd backend && pnpm exec playwright install && cd ..
+
 # Start backend server
 echo "Starting backend server..."
 cd backend && pnpm start &

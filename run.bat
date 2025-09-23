@@ -11,6 +11,10 @@ if not exist "frontend\node_modules" (
     cd frontend && call pnpm install && cd ..
 )
 
+:: Install Playwright browsers
+echo Installing Playwright browsers...
+cd backend && call pnpm exec playwright install && cd ..
+
 :: Start backend server
 echo Starting backend server...
 start cmd /k "cd backend && pnpm start"
